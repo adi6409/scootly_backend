@@ -47,14 +47,18 @@ def get_providers():
     filtered = df[df['Location'].str.lower() == city.lower()]
     providers = []
     for _, row in filtered.iterrows():
+        baseurl = row['Auto-Discovery URL'].split('/gbfs.json')[:-1]
+        # combine the list into a string
+        gbfs_url = ''.join(baseurl)
         providers.append({
             "id": row['System ID'],
             "name": row['Name'],
             "icon": DEFAULT_ICON,
-            "gbfsEndpoint": row['Auto-Discovery URL'],
+            # for gbfs endpoint, we take the URL and remove the last part (split by / and find the lase) and put the rest
+            "gbfsEndpoint": gbfs_url,
             "gbfsEndpoints": DEFAULT_ENDPOINTS,
             "features": DEFAULT_FEATURES,
-            "addJson": True
+            "addJson": True if ".json" in row['Auto-Discovery URL'] else False,
         })
 
     return jsonify({
@@ -62,5 +66,34 @@ def get_providers():
         "data": providers
     })
 
+@app.route("/api/getProvider", methods=['GET'])
+def get_provider():
+    provider_id = request.args.get('id', '')
+    if not provider_id:
+        return jsonify({"statusCode": 400, "data": [], "error": "Missing 'id' parameter"}), 400
+
+    filtered = df[df['System ID'].str.lower() == provider_id.lower()]
+    if filtered.empty:
+        return jsonify({"statusCode": 404, "data": [], "error": "Provider not found"}), 404
+
+    row = filtered.iloc[0]
+    baseurl = row['Auto-Discovery URL'].split('/gbfs.json')[:-1]
+    gbfs_url = ''.join(baseurl)
+
+    provider = {
+        "id": row['System ID'],
+        "name": row['Name'],
+        "icon": DEFAULT_ICON,
+        "gbfsEndpoint": gbfs_url,
+        "gbfsEndpoints": DEFAULT_ENDPOINTS,
+        "features": DEFAULT_FEATURES,
+        "addJson": True if ".json" in row['Auto-Discovery URL'] else False,
+    }
+
+    return jsonify({
+        "statusCode": 200,
+        "data": provider
+    })
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5555)
