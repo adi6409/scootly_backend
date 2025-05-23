@@ -49,7 +49,8 @@ def get_providers():
         providers.append({
             "id": provider["system_id"],
             "name": provider["name"],
-            "icon": DEFAULT_ICON,
+            # use icon_url from the provider, or default icon if not present
+            "icon": provider["icon_url"] if "icon_url" in provider else DEFAULT_ICON,
             "gbfsEndpoint": provider["gbfs_url"],
             "gbfsEndpoints": DEFAULT_ENDPOINTS,
             "features": DEFAULT_FEATURES,
