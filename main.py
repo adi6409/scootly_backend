@@ -1,11 +1,7 @@
 from flask import Flask, jsonify, request
-import pandas as pd
+from database import get_database
 
 app = Flask(__name__)
-
-# Load CSV at startup
-csv_path = "systems.csv"
-df = pd.read_csv(csv_path)
 
 # Mock data (to simplify, icon and feature list are hardcoded)
 DEFAULT_ICON = "https://downloadr2.apkmirror.com/wp-content/uploads/2018/07/5b47c64218d9b.png"
@@ -32,7 +28,8 @@ def example_endpoint():
 
 @app.route('/api/getCities', methods=['GET'])
 def get_cities():
-    unique_cities = df['Location'].dropna().unique().tolist()
+    collection = get_database()
+    unique_cities = collection.distinct("location")
     return jsonify({
         "statusCode": 200,
         "data": unique_cities
@@ -44,21 +41,19 @@ def get_providers():
     if not city:
         return jsonify({"statusCode": 400, "data": [], "error": "Missing 'city' parameter"}), 400
 
-    filtered = df[df['Location'].str.lower() == city.lower()]
+    collection = get_database()
+    providers_data = collection.find({"location": {"$regex": f"^{city}$", "$options": "i"}})
+    
     providers = []
-    for _, row in filtered.iterrows():
-        baseurl = row['Auto-Discovery URL'].split('/gbfs.json')[:-1]
-        # combine the list into a string
-        gbfs_url = ''.join(baseurl)
+    for provider in providers_data:
         providers.append({
-            "id": row['System ID'],
-            "name": row['Name'],
+            "id": provider["system_id"],
+            "name": provider["name"],
             "icon": DEFAULT_ICON,
-            # for gbfs endpoint, we take the URL and remove the last part (split by / and find the lase) and put the rest
-            "gbfsEndpoint": gbfs_url,
+            "gbfsEndpoint": provider["gbfs_url"],
             "gbfsEndpoints": DEFAULT_ENDPOINTS,
             "features": DEFAULT_FEATURES,
-            "addJson": True if ".json" in row['Auto-Discovery URL'] else False,
+            "addJson": provider["add_json"],
         })
 
     return jsonify({
@@ -72,27 +67,23 @@ def get_provider():
     if not provider_id:
         return jsonify({"statusCode": 400, "data": [], "error": "Missing 'id' parameter"}), 400
 
-    filtered = df[df['System ID'].str.lower() == provider_id.lower()]
-    if filtered.empty:
+    collection = get_database()
+    provider = collection.find_one({"system_id": {"$regex": f"^{provider_id}$", "$options": "i"}})
+    
+    if not provider:
         return jsonify({"statusCode": 404, "data": [], "error": "Provider not found"}), 404
-
-    row = filtered.iloc[0]
-    baseurl = row['Auto-Discovery URL'].split('/gbfs.json')[:-1]
-    gbfs_url = ''.join(baseurl)
-
-    provider = {
-        "id": row['System ID'],
-        "name": row['Name'],
-        "icon": DEFAULT_ICON,
-        "gbfsEndpoint": gbfs_url,
-        "gbfsEndpoints": DEFAULT_ENDPOINTS,
-        "features": DEFAULT_FEATURES,
-        "addJson": True if ".json" in row['Auto-Discovery URL'] else False,
-    }
 
     return jsonify({
         "statusCode": 200,
-        "data": provider
+        "data": {
+            "id": provider["system_id"],
+            "name": provider["name"],
+            "icon": DEFAULT_ICON,
+            "gbfsEndpoint": provider["gbfs_url"],
+            "gbfsEndpoints": DEFAULT_ENDPOINTS,
+            "features": DEFAULT_FEATURES,
+            "addJson": provider["add_json"],
+        }
     })
 
 if __name__ == '__main__':
